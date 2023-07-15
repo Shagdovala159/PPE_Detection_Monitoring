@@ -8,7 +8,15 @@ from PyQt5 import QtCore
 import sys
 import numpy as np
 import torch
+import time
+import os
 model = torch.hub.load(r'yolov5', 'custom', path='yolov5/runs/train/exp/weights/best.pt', source='local', force_reload=True, device='cpu')
+# capture photo
+output_folder = 'foto'  # Folder tujuan penyimpanan foto
+
+# Buat folder tujuan jika belum ada
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
 class CaptureIpCameraFramesWorker(QThread):
     # Signal emitted when a new image or a new frame is ready.
     ImageUpdated = pyqtSignal(QImage)
@@ -20,6 +28,8 @@ class CaptureIpCameraFramesWorker(QThread):
         self.__thread_active = True
         self.fps = 0
         self.__thread_pause = False
+        self.current_time = time.time()
+        self.last_time = 0
 
     def run(self) -> None:
         # Capture video from a network stream.
@@ -34,11 +44,32 @@ class CaptureIpCameraFramesWorker(QThread):
             while self.__thread_active:
                 #
                 if not self.__thread_pause:
+                    self.last_time = time.time()
                     # Grabs, decodes and returns the next video frame.
                     ret, cv_img = cap.read()
                     resized_img = cv2.resize(cv_img, (640, 480))
                     results = model(resized_img)
                     frame = np.squeeze(results.render())
+                    if self.last_time - self.current_time >= 30:
+                        timestr = time.strftime("%m%d%H%M%S")
+                        filename = f'foto_{timestr}.jpg'  # Nama file foto dengan format 'foto_counter.jpg'
+                        file_path = os.path.join(output_folder, filename)
+                        cv2.imwrite(file_path, np.squeeze(results.render()))
+                        # coor = results.xyxy[0]
+                        # rows = len(coor)
+                        # i = 0
+                        # while i < rows:
+                        #     print(coor[i][5].item())
+                        #     if coor[i][5].item() == 4:
+                        #         print("ada vest")
+                        #         timestr = time.strftime("%m%d%H%M")
+                        #         filename = f'foto_{timestr}.jpg'  # Nama file foto dengan format 'foto_counter.jpg'
+                        #         file_path = os.path.join(output_folder, filename)
+                        #         cv2.imwrite(file_path, np.squeeze(results.render()))
+                        #         print(f"Foto {filename} diambil dan disimpan!")
+                        #     i += 1
+                        print("sudah 30 detik")
+                        self.current_time = time.time()
                     # If frame is read correctly.
                     if ret:
                         # Get the frame height, width and channels.
@@ -82,7 +113,7 @@ class MainWindow(QMainWindow):
 
         self.url_1 = "http://158.58.130.148:80/mjpg/video.mjpg"
         self.url_2 = "http://195.196.36.242/mjpg/video.mjpg"
-        self.url_3 = "http://tamperehacklab.tunk.org:38001/nphMotionJpeg?Resolution=640x480&Quality=Clarity"
+        self.url_3 = "http://camera.buffalotrace.com/mjpg/video.mjpg"
         self.url_4 = "http://webcam.mchcares.com/mjpg/video.mjpg?timestamp=1566232173730"
         # rtsp://<Username>:<Password>@<IP Address>:<Port>/cam/realmonitor?channel=1&subtype=0
         # self.url_1 = "http://158.58.130.148:80/mjpg/video.mjpg"
