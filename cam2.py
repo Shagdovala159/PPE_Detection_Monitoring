@@ -1,7 +1,7 @@
 # import the require packages.
 import cv2
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, \
-    QLabel, QGridLayout, QScrollArea, QSizePolicy, QMessageBox
+    QLabel, QGridLayout, QScrollArea, QSizePolicy, QMessageBox, QPushButton, QVBoxLayout, QTabWidget, QHBoxLayout
 from PyQt5.QtGui import QPixmap, QIcon, QImage, QPalette
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QEvent, QObject
 from PyQt5 import QtCore
@@ -11,13 +11,10 @@ import torch
 import time
 import os
 model = torch.hub.load(r'yolov5', 'custom', path='yolov5/runs/train/exp2/weights/best.pt', source='local', force_reload=True, device='cpu')
+model.conf = 0.40
 # capture photo
 output_folder = 'foto'  # Folder tujuan penyimpanan foto
-
-# Buat folder tujuan jika belum ada
-if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
-
+#setup
 # Membaca isi file dan menyimpannya ke dalam array
 def read_ip_cameras(file_path):
     ip_cameras = []
@@ -106,7 +103,8 @@ class CaptureIpCameraFramesWorker(QThread):
                         # Scale the image.
                         # NOTE: consider removing the flag Qt.KeepAspectRatio as it will crash Python on older Windows machines
                         # If this is the case, call instead: qt_rgb_image.scaled(1280, 720)
-                        qt_rgb_image_scaled = qt_rgb_image.scaled(1280, 720, Qt.KeepAspectRatio)  # 720p
+                        qt_rgb_image_scaled = qt_rgb_image.scaled(1280, 720, Qt.KeepAspectRatio)
+                        # qt_rgb_image_scaled = qt_rgb_image.scaled(1280, 720, Qt.KeepAspectRatio)  # 720p
                         # qt_rgb_image_scaled = qt_rgb_image.scaled(1920, 1080, Qt.KeepAspectRatio)
                         # Emit this signal to notify that a new image or frame is available.
                         self.ImageUpdated.emit(qt_rgb_image_scaled)
@@ -131,24 +129,36 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super(MainWindow, self).__init__()
+        # add all widgets
+        self.btn_1 = QPushButton('Semua', self)
+        self.btn_2 = QPushButton('Camera 1', self)
+        self.btn_3 = QPushButton('Camera 2', self)
+        self.btn_4 = QPushButton('Camera 3', self)
+        self.btn_5 = QPushButton('Camera 4', self)
+        self.btn_6 = QPushButton('Logging', self)
 
+        self.btn_1.setObjectName('left_button')
+        self.btn_2.setObjectName('left_button')
+        self.btn_3.setObjectName('left_button')
+        self.btn_4.setObjectName('left_button')
+        self.btn_5.setObjectName('left_button')
+        self.btn_6.setObjectName('left_button')
+
+        self.btn_1.clicked.connect(self.button1)
+        self.btn_2.clicked.connect(self.button2)
+        self.btn_3.clicked.connect(self.button3)
+        self.btn_4.clicked.connect(self.button4)
+        self.btn_5.clicked.connect(self.button5)
+        self.btn_6.clicked.connect(self.button6)
+
+
+
+
+        # rtsp://<Username>:<Password>@<IP Address>:<Port>/cam/realmonitor?channel=1&subtype=0
         self.url_1 = array_ip_cameras[0]
         self.url_2 = array_ip_cameras[1]
         self.url_3 = array_ip_cameras[2]
         self.url_4 = array_ip_cameras[3]
-        # self.url_1 = "http://158.58.130.148:80/mjpg/video.mjpg"
-        # self.url_2 = "http://camera.buffalotrace.com/mjpg/video.mjpg"
-        # self.url_3 = "http://takemotopiano.aa1.netvolante.jp:8190/nphMotionJpeg?Resolution=640x480&Quality=Standard&Framerate=30"
-        # self.url_4 = "http://61.211.241.239/nphMotionJpeg?Resolution=320x240&Quality=Standard"
-        # self.url_4 = "http://webcam.mchcares.com/mjpg/video.mjpg?timestamp=1566232173730"
-        # rtsp://<Username>:<Password>@<IP Address>:<Port>/cam/realmonitor?channel=1&subtype=0
-        # self.url_1 = "http://158.58.130.148:80/mjpg/video.mjpg"
-        # self.url_2 = "http://camera.buffalotrace.com/mjpg/video.mjpg"
-        # http://takemotopiano.aa1.netvolante.jp:8190/nphMotionJpeg?Resolution=640x480&Quality=Standard&Framerate=30
-        # http://67.53.46.161:65123/mjpg/video.mjpg
-        # self.url_3 = "http://tamperehacklab.tunk.org:38001/nphMotionJpeg?Resolution=640x480&Quality=Clarity"
-
-
 
         # Dictionary to keep the state of a camera. The camera state will be: Normal or Maximized.
         self.list_of_cameras_state = {}
@@ -209,31 +219,41 @@ class MainWindow(QMainWindow):
         self.QScrollArea_4.setWidgetResizable(True)
         self.QScrollArea_4.setWidget(self.camera_4)
 
+        # add tabs
+        self.tab1 = self.ui1()
+        self.tab2 = self.ui2()
+        self.tab3 = self.ui3()
+        self.tab4 = self.ui4()
+        self.tab5 = self.ui5()
+        self.tab6 = self.ui6()
         # Set the UI elements for this Widget class.
-        self.__SetupUI()
+        self.initUI()
+        # self.__SetupUI()
+
 
         # Create an instance of CaptureIpCameraFramesWorker.
         self.CaptureIpCameraFramesWorker_1 = CaptureIpCameraFramesWorker(self.url_1)
         self.CaptureIpCameraFramesWorker_1.ImageUpdated.connect(lambda image: self.ShowCamera1(image))
-        self.CaptureIpCameraFramesWorker_1.warningSignalhelm.connect(self.showWarninghelm)
-        self.CaptureIpCameraFramesWorker_1.warningSignalvest.connect(self.showWarningvest)
+        self.CaptureIpCameraFramesWorker_1.warningSignalhelm.connect(self.showWarninghelm1)
+        self.CaptureIpCameraFramesWorker_1.warningSignalvest.connect(self.showWarningvest1)
         # Create an instance of CaptureIpCameraFramesWorker.
         self.CaptureIpCameraFramesWorker_2 = CaptureIpCameraFramesWorker(self.url_2)
         self.CaptureIpCameraFramesWorker_2.ImageUpdated.connect(lambda image: self.ShowCamera2(image))
-        self.CaptureIpCameraFramesWorker_2.warningSignalhelm.connect(self.showWarninghelm)
-        self.CaptureIpCameraFramesWorker_2.warningSignalvest.connect(self.showWarningvest)
+        self.CaptureIpCameraFramesWorker_2.warningSignalhelm.connect(self.showWarninghelm2)
+        self.CaptureIpCameraFramesWorker_2.warningSignalvest.connect(self.showWarningvest2)
 
         # Create an instance of CaptureIpCameraFramesWorker.
         self.CaptureIpCameraFramesWorker_3 = CaptureIpCameraFramesWorker(self.url_3)
         self.CaptureIpCameraFramesWorker_3.ImageUpdated.connect(lambda image: self.ShowCamera3(image))
-        self.CaptureIpCameraFramesWorker_3.warningSignalhelm.connect(self.showWarninghelm)
-        self.CaptureIpCameraFramesWorker_3.warningSignalvest.connect(self.showWarningvest)
+        self.CaptureIpCameraFramesWorker_3.warningSignalhelm.connect(self.showWarninghelm3)
+        self.CaptureIpCameraFramesWorker_3.warningSignalvest.connect(self.showWarningvest3)
 
         # Create an instance of CaptureIpCameraFramesWorker.
         self.CaptureIpCameraFramesWorker_4 = CaptureIpCameraFramesWorker(self.url_4)
         self.CaptureIpCameraFramesWorker_4.ImageUpdated.connect(lambda image: self.ShowCamera4(image))
-        self.CaptureIpCameraFramesWorker_4.warningSignalhelm.connect(self.showWarninghelm)
-        self.CaptureIpCameraFramesWorker_4.warningSignalvest.connect(self.showWarningvest)
+        self.CaptureIpCameraFramesWorker_4.warningSignalhelm.connect(self.showWarninghelm4)
+        self.CaptureIpCameraFramesWorker_4.warningSignalvest.connect(self.showWarningvest4)
+
         # Start the thread getIpCameraFrameWorker_1.
         self.CaptureIpCameraFramesWorker_1.start()
 
@@ -245,6 +265,110 @@ class MainWindow(QMainWindow):
 
         # Start the thread getIpCameraFrameWorker_4.
         self.CaptureIpCameraFramesWorker_4.start()
+
+    def button1(self):
+        self.right_widget.setCurrentIndex(0)
+
+    def button2(self):
+        self.right_widget.setCurrentIndex(1)
+
+    def button3(self):
+        self.right_widget.setCurrentIndex(2)
+
+    def button4(self):
+        self.right_widget.setCurrentIndex(3)
+
+    def button5(self):
+        self.right_widget.setCurrentIndex(4)
+    def button6(self):
+        self.right_widget.setCurrentIndex(5)
+    def initUI(self) -> None:
+        left_layout = QVBoxLayout()
+        left_layout.addWidget(self.btn_1)
+        left_layout.addWidget(self.btn_2)
+        left_layout.addWidget(self.btn_3)
+        left_layout.addWidget(self.btn_4)
+        left_layout.addWidget(self.btn_5)
+        left_layout.addWidget(self.btn_6)
+        left_layout.addStretch(100)
+        left_layout.setSpacing(20)
+        left_widget = QWidget()
+        left_widget.setLayout(left_layout)
+
+        self.right_widget = QTabWidget()
+        self.right_widget.tabBar().setObjectName("mainTab")
+
+        self.right_widget.addTab(self.tab1, '')
+        self.right_widget.addTab(self.tab2, '')
+        self.right_widget.addTab(self.tab3, '')
+        self.right_widget.addTab(self.tab4, '')
+        self.right_widget.addTab(self.tab5, '')
+        self.right_widget.addTab(self.tab6, '')
+
+        self.right_widget.setCurrentIndex(0)
+        self.right_widget.setStyleSheet('''QTabBar::tab{width: 0; height: 0; margin: 0; padding: 0; border: none;}''')
+
+        main_layout = QHBoxLayout()
+        main_layout.addWidget(left_widget)
+        main_layout.addWidget(self.right_widget)
+        main_layout.setStretch(0, 1)
+        main_layout.setStretch(1, 100)
+        main_widget = QWidget()
+        main_widget.setLayout(main_layout)
+        self.setCentralWidget(main_widget)
+        self.setMinimumSize(800, 600)
+        self.showMaximized()
+
+    def ui1(self) -> None:
+        grid_layout = QGridLayout()
+        grid_layout.setContentsMargins(0, 0, 0, 0)
+        grid_layout.addWidget(self.QScrollArea_1, 0, 0)
+        grid_layout.addWidget(self.QScrollArea_2, 0, 1)
+        grid_layout.addWidget(self.QScrollArea_3, 1, 0)
+        grid_layout.addWidget(self.QScrollArea_4, 1, 1)
+        main = QWidget()
+        main.setLayout(grid_layout)
+        return main
+
+    def ui2(self):
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(QLabel('page 6'))
+        main_layout.addStretch(5)
+        main = QWidget()
+        main.setLayout(main_layout)
+        return main
+
+    def ui3(self):
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(QLabel('page 6'))
+        main_layout.addStretch(5)
+        main = QWidget()
+        main.setLayout(main_layout)
+        return main
+
+    def ui4(self):
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(QLabel('page 6'))
+        main_layout.addStretch(5)
+        main = QWidget()
+        main.setLayout(main_layout)
+        return main
+
+    def ui5(self):
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(QLabel('page 6'))
+        main_layout.addStretch(5)
+        main = QWidget()
+        main.setLayout(main_layout)
+        return main
+
+    def ui6(self):
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(QLabel('page 6'))
+        main_layout.addStretch(5)
+        main = QWidget()
+        main.setLayout(main_layout)
+        return main
 
     def __SetupUI(self) -> None:
         # Create an instance of a QGridLayout layout.
@@ -379,6 +503,61 @@ class MainWindow(QMainWindow):
         msg.setWindowTitle("Warning")
         msg.exec_()
 
+    def showWarninghelm1(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai helm pada camera 1")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarningvest1(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai vest pada camera 1")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarninghelm2(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai helm pada camera 2")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarningvest2(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai vest pada camera 2")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarninghelm3(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai helm pada camera 3")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarningvest3(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai vest pada camera 3")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarninghelm4(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai helm pada camera 4")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarningvest4(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai vest pada camera 4")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
 def main() -> None:
     # Create a QApplication object. It manages the GUI application's control flow and main settings.
     # It handles widget specific initialization, finalization.
