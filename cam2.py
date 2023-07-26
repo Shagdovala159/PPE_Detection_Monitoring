@@ -1,8 +1,10 @@
 # import the require packages.
 import cv2
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, \
-    QLabel, QGridLayout, QScrollArea, QSizePolicy, QMessageBox, QPushButton, QVBoxLayout, QTabWidget, QHBoxLayout
+    QLabel, QGridLayout, QScrollArea, QSizePolicy, QMessageBox,  \
+    QPushButton, QVBoxLayout, QTabWidget, QHBoxLayout, QTableWidget, QTableWidgetItem
 from PyQt5.QtGui import QPixmap, QIcon, QImage, QPalette
+from PyQt5.QtSql import QSqlDatabase, QSqlQuery
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QEvent, QObject
 from PyQt5 import QtCore
 import sys
@@ -32,6 +34,7 @@ print(array_ip_cameras[0])
 print(array_ip_cameras[1])
 print(array_ip_cameras[2])
 print(array_ip_cameras[3])
+
 
 class CaptureIpCameraFramesWorker(QThread):
     # Signal emitted when a new image or a new frame is ready.
@@ -129,30 +132,21 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super(MainWindow, self).__init__()
+
         # add all widgets
-        self.btn_1 = QPushButton('Semua', self)
-        self.btn_2 = QPushButton('Camera 1', self)
-        self.btn_3 = QPushButton('Camera 2', self)
-        self.btn_4 = QPushButton('Camera 3', self)
-        self.btn_5 = QPushButton('Camera 4', self)
-        self.btn_6 = QPushButton('Logging', self)
+        self.btn_1 = QPushButton('Camera', self)
+        self.btn_2 = QPushButton('Logging', self)
 
         self.btn_1.setObjectName('left_button')
         self.btn_2.setObjectName('left_button')
-        self.btn_3.setObjectName('left_button')
-        self.btn_4.setObjectName('left_button')
-        self.btn_5.setObjectName('left_button')
-        self.btn_6.setObjectName('left_button')
 
         self.btn_1.clicked.connect(self.button1)
         self.btn_2.clicked.connect(self.button2)
-        self.btn_3.clicked.connect(self.button3)
-        self.btn_4.clicked.connect(self.button4)
-        self.btn_5.clicked.connect(self.button5)
-        self.btn_6.clicked.connect(self.button6)
 
-
-
+        self.db = QSqlDatabase.addDatabase('QSQLITE')
+        self.db.setDatabaseName('logging.db')
+        if not self.db.open():
+            print("Tidak dapat membuka koneksi database")
 
         # rtsp://<Username>:<Password>@<IP Address>:<Port>/cam/realmonitor?channel=1&subtype=0
         self.url_1 = array_ip_cameras[0]
@@ -222,10 +216,6 @@ class MainWindow(QMainWindow):
         # add tabs
         self.tab1 = self.ui1()
         self.tab2 = self.ui2()
-        self.tab3 = self.ui3()
-        self.tab4 = self.ui4()
-        self.tab5 = self.ui5()
-        self.tab6 = self.ui6()
         # Set the UI elements for this Widget class.
         self.initUI()
         # self.__SetupUI()
@@ -272,24 +262,10 @@ class MainWindow(QMainWindow):
     def button2(self):
         self.right_widget.setCurrentIndex(1)
 
-    def button3(self):
-        self.right_widget.setCurrentIndex(2)
-
-    def button4(self):
-        self.right_widget.setCurrentIndex(3)
-
-    def button5(self):
-        self.right_widget.setCurrentIndex(4)
-    def button6(self):
-        self.right_widget.setCurrentIndex(5)
     def initUI(self) -> None:
         left_layout = QVBoxLayout()
         left_layout.addWidget(self.btn_1)
         left_layout.addWidget(self.btn_2)
-        left_layout.addWidget(self.btn_3)
-        left_layout.addWidget(self.btn_4)
-        left_layout.addWidget(self.btn_5)
-        left_layout.addWidget(self.btn_6)
         left_layout.addStretch(100)
         left_layout.setSpacing(20)
         left_widget = QWidget()
@@ -300,10 +276,6 @@ class MainWindow(QMainWindow):
 
         self.right_widget.addTab(self.tab1, '')
         self.right_widget.addTab(self.tab2, '')
-        self.right_widget.addTab(self.tab3, '')
-        self.right_widget.addTab(self.tab4, '')
-        self.right_widget.addTab(self.tab5, '')
-        self.right_widget.addTab(self.tab6, '')
 
         self.right_widget.setCurrentIndex(0)
         self.right_widget.setStyleSheet('''QTabBar::tab{width: 0; height: 0; margin: 0; padding: 0; border: none;}''')
@@ -319,6 +291,16 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(800, 600)
         self.showMaximized()
 
+    def fetch_data(self):
+        query = QSqlQuery("SELECT * FROM data")
+        data = []
+        while query.next():
+            tanggal = query.value(1)
+            waktu = query.value(2)
+            lokasi = query.value(3)
+            bukti = query.value(4)
+            data.append((tanggal, waktu, lokasi, bukti))
+        return data
     def ui1(self) -> None:
         grid_layout = QGridLayout()
         grid_layout.setContentsMargins(0, 0, 0, 0)
@@ -331,44 +313,23 @@ class MainWindow(QMainWindow):
         return main
 
     def ui2(self):
+        table_widget = QTableWidget()
+        table_widget.setColumnCount(4)
+        table_widget.setHorizontalHeaderLabels(['Tanggal', 'Waktu', 'Lokasi', 'Bukti'])
+        data = self.fetch_data()
+        table_widget.setRowCount(len(data))
+        for row, (tanggal, waktu, lokasi, bukti) in enumerate(data):
+            table_widget.setItem(row, 0, QTableWidgetItem(tanggal))
+            table_widget.setItem(row, 1, QTableWidgetItem(waktu))
+            table_widget.setItem(row, 2, QTableWidgetItem(lokasi))
+            table_widget.setItem(row, 3, QTableWidgetItem(bukti))
         main_layout = QVBoxLayout()
-        main_layout.addWidget(QLabel('page 6'))
-        main_layout.addStretch(5)
+        main_layout.addWidget(table_widget)
         main = QWidget()
         main.setLayout(main_layout)
         return main
 
-    def ui3(self):
-        main_layout = QVBoxLayout()
-        main_layout.addWidget(QLabel('page 6'))
-        main_layout.addStretch(5)
-        main = QWidget()
-        main.setLayout(main_layout)
-        return main
 
-    def ui4(self):
-        main_layout = QVBoxLayout()
-        main_layout.addWidget(QLabel('page 6'))
-        main_layout.addStretch(5)
-        main = QWidget()
-        main.setLayout(main_layout)
-        return main
-
-    def ui5(self):
-        main_layout = QVBoxLayout()
-        main_layout.addWidget(QLabel('page 6'))
-        main_layout.addStretch(5)
-        main = QWidget()
-        main.setLayout(main_layout)
-        return main
-
-    def ui6(self):
-        main_layout = QVBoxLayout()
-        main_layout.addWidget(QLabel('page 6'))
-        main_layout.addStretch(5)
-        main = QWidget()
-        main.setLayout(main_layout)
-        return main
 
     def __SetupUI(self) -> None:
         # Create an instance of a QGridLayout layout.
