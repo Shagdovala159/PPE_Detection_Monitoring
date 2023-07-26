@@ -2,8 +2,8 @@
 import cv2
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, \
     QLabel, QGridLayout, QScrollArea, QSizePolicy, QMessageBox,  \
-    QPushButton, QVBoxLayout, QTabWidget, QHBoxLayout, QTableWidget, QTableWidgetItem
-from PyQt5.QtGui import QPixmap, QIcon, QImage, QPalette
+    QPushButton, QVBoxLayout, QTabWidget, QHBoxLayout, QTableWidget, QTableWidgetItem, QDateEdit, QHeaderView, QDialog
+from PyQt5.QtGui import QPixmap, QIcon, QImage, QPalette,QPixmap
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QEvent, QObject
 from PyQt5 import QtCore
@@ -35,7 +35,19 @@ print(array_ip_cameras[1])
 print(array_ip_cameras[2])
 print(array_ip_cameras[3])
 
+class ImageViewer(QDialog):
+    def __init__(self, image_path):
+        super().__init__()
+        self.setWindowTitle("Image Viewer")
 
+        layout = QVBoxLayout()
+
+        label = QLabel()
+        pixmap = QPixmap(image_path)
+        label.setPixmap(pixmap)
+
+        layout.addWidget(label)
+        self.setLayout(layout)
 class CaptureIpCameraFramesWorker(QThread):
     # Signal emitted when a new image or a new frame is ready.
     ImageUpdated = pyqtSignal(QImage)
@@ -137,16 +149,26 @@ class MainWindow(QMainWindow):
         self.btn_1 = QPushButton('Camera', self)
         self.btn_2 = QPushButton('Logging', self)
 
+
         self.btn_1.setObjectName('left_button')
         self.btn_2.setObjectName('left_button')
 
         self.btn_1.clicked.connect(self.button1)
         self.btn_2.clicked.connect(self.button2)
 
+        self.btn_ui2_1 = QPushButton('Enter', self)
+        self.btn_ui2_1.clicked.connect(self.updatetable)
+
         self.db = QSqlDatabase.addDatabase('QSQLITE')
         self.db.setDatabaseName('logging.db')
         if not self.db.open():
             print("Tidak dapat membuka koneksi database")
+
+        self.showText = QLabel("Total Pelanggaran")
+        self.showcam1 = QLabel("Camera 1 : 10")
+        self.showcam2 = QLabel("Camera 2 : 20")
+        self.showcam3 = QLabel("Camera 3 : 30")
+        self.showcam4 = QLabel("Camera 4 : 40")
 
         # rtsp://<Username>:<Password>@<IP Address>:<Port>/cam/realmonitor?channel=1&subtype=0
         self.url_1 = array_ip_cameras[0]
@@ -218,7 +240,6 @@ class MainWindow(QMainWindow):
         self.tab2 = self.ui2()
         # Set the UI elements for this Widget class.
         self.initUI()
-        # self.__SetupUI()
 
 
         # Create an instance of CaptureIpCameraFramesWorker.
@@ -312,47 +333,63 @@ class MainWindow(QMainWindow):
         main.setLayout(grid_layout)
         return main
 
+    def show_image(self, row, column):
+        # Jika yang diklik adalah kolom Bukti (indeks kolom 3)
+        if column == 3:
+            image_path = self.table_widget.item(row, column).text()
+            image_viewer = ImageViewer(image_path)
+            image_viewer.exec_()
     def ui2(self):
+        button_height = 60
+        upper_layout = QHBoxLayout()
+        dateeditstart = QDateEdit(calendarPopup=True)
+        dateeditstart.setDateTime(QtCore.QDateTime.currentDateTime())
+        dateeditend = QDateEdit(calendarPopup=True)
+        dateeditend.setDateTime(QtCore.QDateTime.currentDateTime())
+        dateeditstart.setFixedHeight(button_height)
+        dateeditend.setFixedHeight(button_height)
+        self.btn_ui2_1.setFixedHeight(button_height)
+        upper_layout.addWidget(dateeditstart)
+        upper_layout.addWidget(dateeditend)
+        upper_layout.addWidget(self.btn_ui2_1)
         table_widget = QTableWidget()
         table_widget.setColumnCount(4)
         table_widget.setHorizontalHeaderLabels(['Tanggal', 'Waktu', 'Lokasi', 'Bukti'])
         data = self.fetch_data()
         table_widget.setRowCount(len(data))
         for row, (tanggal, waktu, lokasi, bukti) in enumerate(data):
-            table_widget.setItem(row, 0, QTableWidgetItem(tanggal))
-            table_widget.setItem(row, 1, QTableWidgetItem(waktu))
-            table_widget.setItem(row, 2, QTableWidgetItem(lokasi))
+            itemtanggal = QTableWidgetItem(tanggal)
+            itemwaktu = QTableWidgetItem(waktu)
+            itemlokasi = QTableWidgetItem(lokasi)
+            itemtanggal.setTextAlignment(Qt.AlignCenter)
+            itemwaktu.setTextAlignment(Qt.AlignCenter)
+            itemlokasi.setTextAlignment(Qt.AlignCenter)
+            table_widget.setItem(row, 0, itemtanggal)
+            table_widget.setItem(row, 1, itemwaktu)
+            table_widget.setItem(row, 2, itemlokasi)
             table_widget.setItem(row, 3, QTableWidgetItem(bukti))
+
+        table_widget.setColumnWidth(0, 200)  # Kolom Tanggal
+        table_widget.setColumnWidth(1, 140)   # Kolom Waktu
+        table_widget.setColumnWidth(2, 300)  # Kolom Lokasi
+        table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)  # Kolom Bukti
+
+        table_widget.cellClicked.connect(self.show_image)
         main_layout = QVBoxLayout()
+        main_layout.addLayout(upper_layout)
+        main_layout.addWidget(self.showText)
+        main_layout.addWidget(self.showcam1)
+        main_layout.addWidget(self.showcam2)
+        main_layout.addWidget(self.showcam3)
+        main_layout.addWidget(self.showcam4)
         main_layout.addWidget(table_widget)
         main = QWidget()
         main.setLayout(main_layout)
         return main
 
-
-
-    def __SetupUI(self) -> None:
-        # Create an instance of a QGridLayout layout.
-        grid_layout = QGridLayout()
-        grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.addWidget(self.QScrollArea_1, 0, 0)
-        grid_layout.addWidget(self.QScrollArea_2, 0, 1)
-        grid_layout.addWidget(self.QScrollArea_3, 1, 0)
-        grid_layout.addWidget(self.QScrollArea_4, 1, 1)
-
-        # Create a widget instance.
-        self.widget = QWidget(self)
-        self.widget.setLayout(grid_layout)
-
-        # Set the central widget.
-        self.setCentralWidget(self.widget)
-        self.setMinimumSize(800, 600)
-        self.showMaximized()
-        self.setStyleSheet("QMainWindow {background: 'black';}")
-        self.setWindowIcon(QIcon(QPixmap("camera_2.png")))
-        # Set window title.
-        self.setWindowTitle("IP Camera System")
-
+    @QtCore.pyqtSlot()
+    def updatetable(self):
+        importedfile = self.fetch_data()
     @QtCore.pyqtSlot()
     def ShowCamera1(self, frame: QImage) -> None:
         self.camera_1.setPixmap(QPixmap.fromImage(frame))
