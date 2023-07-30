@@ -1,23 +1,23 @@
 # import the require packages.
 import cv2
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, \
-    QLabel, QGridLayout, QScrollArea, QSizePolicy, QMessageBox
-from PyQt5.QtGui import QPixmap, QIcon, QImage, QPalette
+    QLabel, QGridLayout, QScrollArea, QSizePolicy, QMessageBox,  \
+    QPushButton, QVBoxLayout, QTabWidget, QHBoxLayout, QTableWidget, QTableWidgetItem, QDateEdit, QHeaderView, QDialog
+from PyQt5.QtGui import QPixmap, QIcon, QImage, QPalette,QPixmap
+from PyQt5.QtSql import QSqlDatabase, QSqlQuery
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QEvent, QObject
 from PyQt5 import QtCore
+from datetime import date
 import sys
 import numpy as np
 import torch
 import time
 import os
 model = torch.hub.load(r'yolov5', 'custom', path='yolov5/runs/train/exp2/weights/best.pt', source='local', force_reload=True, device='cpu')
+model.conf = 0.5
 # capture photo
 output_folder = 'foto'  # Folder tujuan penyimpanan foto
-
-# Buat folder tujuan jika belum ada
-if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
-
+#setup
 # Membaca isi file dan menyimpannya ke dalam array
 def read_ip_cameras(file_path):
     ip_cameras = []
@@ -36,13 +36,26 @@ print(array_ip_cameras[1])
 print(array_ip_cameras[2])
 print(array_ip_cameras[3])
 
+class ImageViewer(QDialog):
+    def __init__(self, image_path):
+        super().__init__()
+        self.setWindowTitle("Image Viewer")
+
+        layout = QVBoxLayout()
+
+        label = QLabel()
+        pixmap = QPixmap(image_path)
+        label.setPixmap(pixmap)
+
+        layout.addWidget(label)
+        self.setLayout(layout)
 class CaptureIpCameraFramesWorker(QThread):
     # Signal emitted when a new image or a new frame is ready.
     ImageUpdated = pyqtSignal(QImage)
     warningSignalhelm = pyqtSignal()
     warningSignalvest = pyqtSignal()
 
-    def __init__(self, url) -> None:
+    def __init__(self, url, camnumber) -> None:
         super(CaptureIpCameraFramesWorker, self).__init__()
         # Declare and initialize instance variables.
         self.url = url
@@ -51,6 +64,10 @@ class CaptureIpCameraFramesWorker(QThread):
         self.__thread_pause = False
         self.current_time = time.time()
         self.last_time = 0
+        self.tanggal = ""
+        self.waktu = ""
+        self.lokasi = camnumber
+        self.bukti = ""
 
     def run(self) -> None:
         # Capture video from a network stream.
@@ -75,7 +92,8 @@ class CaptureIpCameraFramesWorker(QThread):
                     rows = len(coor)
                     i = 0
                     while i < rows:
-                        if coor[i][5].item() == 1 and self.last_time - self.current_time >= 5:
+                        check = coor[i][5].item()
+                        if check == 1 and self.last_time - self.current_time >= 5:
                             timestr = time.strftime("%m%d%H%M%S")
                             filename = f'tanpahelm_{timestr}.jpg'  # Nama file foto dengan format 'foto_counter.jpg'
                             file_path = os.path.join(output_folder, filename)
@@ -84,7 +102,7 @@ class CaptureIpCameraFramesWorker(QThread):
                             self.warningSignalhelm.emit()
                             self.current_time = time.time()
 
-                        if coor[i][5].item() == 2 and self.last_time - self.current_time >= 5:
+                        if check == 2 and self.last_time - self.current_time >= 5:
                             timestr = time.strftime("%m%d%H%M%S")
                             filename = f'tanpavest_{timestr}.jpg'  # Nama file foto dengan format 'foto_counter.jpg'
                             file_path = os.path.join(output_folder, filename)
@@ -92,6 +110,7 @@ class CaptureIpCameraFramesWorker(QThread):
                             print(f"Foto {filename} diambil dan disimpan!")
                             self.warningSignalvest.emit()
                             self.current_time = time.time()
+                        i = i + 1
                     if ret:
                         # Get the frame height, width and channels.
                         height, width, channels = frame.shape
@@ -106,7 +125,8 @@ class CaptureIpCameraFramesWorker(QThread):
                         # Scale the image.
                         # NOTE: consider removing the flag Qt.KeepAspectRatio as it will crash Python on older Windows machines
                         # If this is the case, call instead: qt_rgb_image.scaled(1280, 720)
-                        qt_rgb_image_scaled = qt_rgb_image.scaled(1280, 720, Qt.KeepAspectRatio)  # 720p
+                        qt_rgb_image_scaled = qt_rgb_image.scaled(1280, 720, Qt.KeepAspectRatio)
+                        # qt_rgb_image_scaled = qt_rgb_image.scaled(1280, 720, Qt.KeepAspectRatio)  # 720p
                         # qt_rgb_image_scaled = qt_rgb_image.scaled(1920, 1080, Qt.KeepAspectRatio)
                         # Emit this signal to notify that a new image or frame is available.
                         self.ImageUpdated.emit(qt_rgb_image_scaled)
@@ -132,24 +152,56 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super(MainWindow, self).__init__()
 
-        self.url_1 = array_ip_cameras[0]
-        self.url_2 = array_ip_cameras[1]
-        self.url_3 = array_ip_cameras[2]
-        self.url_4 = array_ip_cameras[3]
-        # self.url_1 = "http://158.58.130.148:80/mjpg/video.mjpg"
-        # self.url_2 = "http://camera.buffalotrace.com/mjpg/video.mjpg"
-        # self.url_3 = "http://takemotopiano.aa1.netvolante.jp:8190/nphMotionJpeg?Resolution=640x480&Quality=Standard&Framerate=30"
-        # self.url_4 = "http://61.211.241.239/nphMotionJpeg?Resolution=320x240&Quality=Standard"
-        # self.url_4 = "http://webcam.mchcares.com/mjpg/video.mjpg?timestamp=1566232173730"
+        # add all widgets
+        self.btn_1 = QPushButton('Camera', self)
+        self.btn_2 = QPushButton('Logging', self)
+
+
+        self.btn_1.setObjectName('left_button')
+        self.btn_2.setObjectName('left_button')
+
+        self.btn_1.clicked.connect(self.button1)
+        self.btn_2.clicked.connect(self.button2)
+
+        self.btn_ui2_1 = QPushButton('Enter', self)
+        self.btn_ui2_1.clicked.connect(self.updatetable)
+
+        self.db = QSqlDatabase.addDatabase('QSQLITE')
+        self.db.setDatabaseName('logging.db')
+        if not self.db.open():
+            print("Tidak dapat membuka koneksi database")
+
+        self.showText = QLabel("Total Pelanggaran")
+        self.value1 = 0
+        self.value2 = 0
+        self.value3 = 0
+        self.value4 = 0
+        self.showcam1 = QLabel("Camera 1 : " + str(self.value1))
+        self.showcam2 = QLabel("Camera 2 : " + str(self.value2))
+        self.showcam3 = QLabel("Camera 3 : " + str(self.value3))
+        self.showcam4 = QLabel("Camera 4 : " + str(self.value4))
+
+        # Table instance
+        self.table_widget = QTableWidget()
+        self.table_widget.setColumnCount(4)
+        self.table_widget.setHorizontalHeaderLabels(['Tanggal', 'Waktu', 'Lokasi', 'Bukti'])
+        self.table_widget.setColumnWidth(0, 200)  # Kolom Tanggal
+        self.table_widget.setColumnWidth(1, 140)   # Kolom Waktu
+        self.table_widget.setColumnWidth(2, 300)  # Kolom Lokasi
+        self.table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)  # Kolom Bukti
         # rtsp://<Username>:<Password>@<IP Address>:<Port>/cam/realmonitor?channel=1&subtype=0
-        # self.url_1 = "http://158.58.130.148:80/mjpg/video.mjpg"
-        # self.url_2 = "http://camera.buffalotrace.com/mjpg/video.mjpg"
-        # http://takemotopiano.aa1.netvolante.jp:8190/nphMotionJpeg?Resolution=640x480&Quality=Standard&Framerate=30
-        # http://67.53.46.161:65123/mjpg/video.mjpg
-        # self.url_3 = "http://tamperehacklab.tunk.org:38001/nphMotionJpeg?Resolution=640x480&Quality=Clarity"
-
-
-
+        self.url_1 = "http://158.58.130.148:80/mjpg/video.mjpg"
+        self.url_3 = "http://takemotopiano.aa1.netvolante.jp:8190/nphMotionJpeg?Resolution=640x480&Quality=Standard&Framerate=30"
+        self.url_2 = "http://camera.buffalotrace.com/mjpg/video.mjpg"
+        self.url_4 = "http://61.211.241.239/nphMotionJpeg?Resolution=320x240&Quality=Standard"
+        # self.url_1 = array_ip_cameras[0]
+        # self.url_2 = array_ip_cameras[1]
+        # self.url_3 = array_ip_cameras[2]
+        # self.url_4 = array_ip_cameras[3]
+        self.camname1 = "Camera 1"
+        self.camname2 = "Camera 2"
+        self.camname3 = "Camera 3"
+        self.camname4 = "Camera 4"
         # Dictionary to keep the state of a camera. The camera state will be: Normal or Maximized.
         self.list_of_cameras_state = {}
 
@@ -209,31 +261,36 @@ class MainWindow(QMainWindow):
         self.QScrollArea_4.setWidgetResizable(True)
         self.QScrollArea_4.setWidget(self.camera_4)
 
+        # add tabs
+        self.tab1 = self.ui1()
+        self.tab2 = self.ui2()
         # Set the UI elements for this Widget class.
-        self.__SetupUI()
+        self.initUI()
+
 
         # Create an instance of CaptureIpCameraFramesWorker.
-        self.CaptureIpCameraFramesWorker_1 = CaptureIpCameraFramesWorker(self.url_1)
+        self.CaptureIpCameraFramesWorker_1 = CaptureIpCameraFramesWorker(self.url_1, self.camname1)
         self.CaptureIpCameraFramesWorker_1.ImageUpdated.connect(lambda image: self.ShowCamera1(image))
-        self.CaptureIpCameraFramesWorker_1.warningSignalhelm.connect(self.showWarninghelm)
-        self.CaptureIpCameraFramesWorker_1.warningSignalvest.connect(self.showWarningvest)
+        self.CaptureIpCameraFramesWorker_1.warningSignalhelm.connect(self.showWarninghelm1)
+        self.CaptureIpCameraFramesWorker_1.warningSignalvest.connect(self.showWarningvest1)
         # Create an instance of CaptureIpCameraFramesWorker.
-        self.CaptureIpCameraFramesWorker_2 = CaptureIpCameraFramesWorker(self.url_2)
+        self.CaptureIpCameraFramesWorker_2 = CaptureIpCameraFramesWorker(self.url_2, self.camname2)
         self.CaptureIpCameraFramesWorker_2.ImageUpdated.connect(lambda image: self.ShowCamera2(image))
-        self.CaptureIpCameraFramesWorker_2.warningSignalhelm.connect(self.showWarninghelm)
-        self.CaptureIpCameraFramesWorker_2.warningSignalvest.connect(self.showWarningvest)
+        self.CaptureIpCameraFramesWorker_2.warningSignalhelm.connect(self.showWarninghelm2)
+        self.CaptureIpCameraFramesWorker_2.warningSignalvest.connect(self.showWarningvest2)
 
         # Create an instance of CaptureIpCameraFramesWorker.
-        self.CaptureIpCameraFramesWorker_3 = CaptureIpCameraFramesWorker(self.url_3)
+        self.CaptureIpCameraFramesWorker_3 = CaptureIpCameraFramesWorker(self.url_3, self.camname3)
         self.CaptureIpCameraFramesWorker_3.ImageUpdated.connect(lambda image: self.ShowCamera3(image))
-        self.CaptureIpCameraFramesWorker_3.warningSignalhelm.connect(self.showWarninghelm)
-        self.CaptureIpCameraFramesWorker_3.warningSignalvest.connect(self.showWarningvest)
+        self.CaptureIpCameraFramesWorker_3.warningSignalhelm.connect(self.showWarninghelm3)
+        self.CaptureIpCameraFramesWorker_3.warningSignalvest.connect(self.showWarningvest3)
 
         # Create an instance of CaptureIpCameraFramesWorker.
-        self.CaptureIpCameraFramesWorker_4 = CaptureIpCameraFramesWorker(self.url_4)
+        self.CaptureIpCameraFramesWorker_4 = CaptureIpCameraFramesWorker(self.url_4, self.camname4)
         self.CaptureIpCameraFramesWorker_4.ImageUpdated.connect(lambda image: self.ShowCamera4(image))
-        self.CaptureIpCameraFramesWorker_4.warningSignalhelm.connect(self.showWarninghelm)
-        self.CaptureIpCameraFramesWorker_4.warningSignalvest.connect(self.showWarningvest)
+        self.CaptureIpCameraFramesWorker_4.warningSignalhelm.connect(self.showWarninghelm4)
+        self.CaptureIpCameraFramesWorker_4.warningSignalvest.connect(self.showWarningvest4)
+
         # Start the thread getIpCameraFrameWorker_1.
         self.CaptureIpCameraFramesWorker_1.start()
 
@@ -246,28 +303,124 @@ class MainWindow(QMainWindow):
         # Start the thread getIpCameraFrameWorker_4.
         self.CaptureIpCameraFramesWorker_4.start()
 
-    def __SetupUI(self) -> None:
-        # Create an instance of a QGridLayout layout.
+    def button1(self):
+        self.right_widget.setCurrentIndex(0)
+
+    def button2(self):
+        self.right_widget.setCurrentIndex(1)
+
+    def initUI(self) -> None:
+        left_layout = QVBoxLayout()
+        left_layout.addWidget(self.btn_1)
+        left_layout.addWidget(self.btn_2)
+        left_layout.addStretch(100)
+        left_layout.setSpacing(20)
+        left_widget = QWidget()
+        left_widget.setLayout(left_layout)
+
+        self.right_widget = QTabWidget()
+        self.right_widget.tabBar().setObjectName("mainTab")
+
+        self.right_widget.addTab(self.tab1, '')
+        self.right_widget.addTab(self.tab2, '')
+
+        self.right_widget.setCurrentIndex(0)
+        self.right_widget.setStyleSheet('''QTabBar::tab{width: 0; height: 0; margin: 0; padding: 0; border: none;}''')
+
+        main_layout = QHBoxLayout()
+        main_layout.addWidget(left_widget)
+        main_layout.addWidget(self.right_widget)
+        main_layout.setStretch(0, 1)
+        main_layout.setStretch(1, 100)
+        main_widget = QWidget()
+        main_widget.setLayout(main_layout)
+        self.setCentralWidget(main_widget)
+        self.setMinimumSize(800, 600)
+        self.showMaximized()
+        self.setWindowIcon(QIcon(QPixmap("logo.png")))
+        # Set window title.
+        self.setWindowTitle("IP Camera System")
+
+    def insert_data(self, tanggal, waktu, lokasi, bukti):
+        query = QSqlQuery()
+        query.prepare("INSERT INTO data (Tanggal, Waktu, Lokasi, Bukti) VALUES (?, ?, ?, ?)")
+        query.addBindValue(tanggal)
+        query.addBindValue(waktu)
+        query.addBindValue(lokasi)
+        query.addBindValue(bukti)
+        if not query.exec_():
+            print("Gagal menyisipkan data:", query.lastError().text())
+            return False
+        return True
+    def fetch_alldata(self):
+        query = QSqlQuery("SELECT * FROM data")
+        data = []
+        while query.next():
+            tanggal = query.value(1)
+            waktu = query.value(2)
+            lokasi = query.value(3)
+            bukti = query.value(4)
+            data.append((tanggal, waktu, lokasi, bukti))
+        return data
+    def ui1(self) -> None:
         grid_layout = QGridLayout()
         grid_layout.setContentsMargins(0, 0, 0, 0)
         grid_layout.addWidget(self.QScrollArea_1, 0, 0)
         grid_layout.addWidget(self.QScrollArea_2, 0, 1)
         grid_layout.addWidget(self.QScrollArea_3, 1, 0)
         grid_layout.addWidget(self.QScrollArea_4, 1, 1)
+        self.main = QWidget()
+        self.main.setLayout(grid_layout)
+        return self.main
 
-        # Create a widget instance.
-        self.widget = QWidget(self)
-        self.widget.setLayout(grid_layout)
+    def show_image(self, row, column):
+        # Jika yang diklik adalah kolom Bukti (indeks kolom 3)
+        if column == 3:
+            image_path = self.table_widget.item(row, column).text()
+            image_viewer = ImageViewer(image_path)
+            image_viewer.exec_()
+    def ui2(self):
+        button_height = 60
+        upper_layout = QHBoxLayout()
+        dateeditstart = QDateEdit(calendarPopup=True)
+        dateeditstart.setDateTime(QtCore.QDateTime.currentDateTime())
+        dateeditend = QDateEdit(calendarPopup=True)
+        dateeditend.setDateTime(QtCore.QDateTime.currentDateTime())
+        dateeditstart.setFixedHeight(button_height)
+        dateeditend.setFixedHeight(button_height)
+        self.btn_ui2_1.setFixedHeight(button_height)
+        upper_layout.addWidget(dateeditstart)
+        upper_layout.addWidget(dateeditend)
+        upper_layout.addWidget(self.btn_ui2_1)
+        data = self.fetch_alldata()
+        self.table_widget.setRowCount(len(data))
+        for row, (tanggal, waktu, lokasi, bukti) in enumerate(data):
+            itemtanggal = QTableWidgetItem(tanggal)
+            itemwaktu = QTableWidgetItem(waktu)
+            itemlokasi = QTableWidgetItem(lokasi)
+            itemtanggal.setTextAlignment(Qt.AlignCenter)
+            itemwaktu.setTextAlignment(Qt.AlignCenter)
+            itemlokasi.setTextAlignment(Qt.AlignCenter)
+            self.table_widget.setItem(row, 0, itemtanggal)
+            self.table_widget.setItem(row, 1, itemwaktu)
+            self.table_widget.setItem(row, 2, itemlokasi)
+            self.table_widget.setItem(row, 3, QTableWidgetItem(bukti))
+        self.table_widget.cellClicked.connect(self.show_image)
+        main_layout = QVBoxLayout()
+        main_layout.addLayout(upper_layout)
+        main_layout.addWidget(self.showText)
+        main_layout.addWidget(self.showcam1)
+        main_layout.addWidget(self.showcam2)
+        main_layout.addWidget(self.showcam3)
+        main_layout.addWidget(self.showcam4)
+        main_layout.addWidget(self.table_widget)
+        main = QWidget()
+        main.setLayout(main_layout)
+        return main
 
-        # Set the central widget.
-        self.setCentralWidget(self.widget)
-        self.setMinimumSize(800, 600)
-        self.showMaximized()
-        self.setStyleSheet("QMainWindow {background: 'black';}")
-        self.setWindowIcon(QIcon(QPixmap("camera_2.png")))
-        # Set window title.
-        self.setWindowTitle("IP Camera System")
-
+    @QtCore.pyqtSlot()
+    def updatetable(self):
+        importedfile = self.fetch_data()
     @QtCore.pyqtSlot()
     def ShowCamera1(self, frame: QImage) -> None:
         self.camera_1.setPixmap(QPixmap.fromImage(frame))
@@ -379,6 +532,61 @@ class MainWindow(QMainWindow):
         msg.setWindowTitle("Warning")
         msg.exec_()
 
+    def showWarninghelm1(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai helm pada camera 1")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarningvest1(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai vest pada camera 1")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarninghelm2(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai helm pada camera 2")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarningvest2(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai vest pada camera 2")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarninghelm3(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai helm pada camera 3")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarningvest3(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai vest pada camera 3")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarninghelm4(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai helm pada camera 4")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
+
+    def showWarningvest4(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Terdeteksi orang tidak memakai vest pada camera 4")
+        msg.setWindowTitle("Warning")
+        msg.exec_()
 def main() -> None:
     # Create a QApplication object. It manages the GUI application's control flow and main settings.
     # It handles widget specific initialization, finalization.
