@@ -5,14 +5,15 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, \
     QPushButton, QVBoxLayout, QTabWidget, QHBoxLayout, QTableWidget, QTableWidgetItem, QDateEdit, QHeaderView, QDialog
 from PyQt5.QtGui import QPixmap, QIcon, QImage, QPalette,QPixmap
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery
-from PyQt5.QtCore import QThread, pyqtSignal, Qt, QEvent, QObject
+from PyQt5.QtCore import QThread, pyqtSignal, Qt, QEvent, QObject, QDateTime
 from PyQt5 import QtCore
-from datetime import date
+from datetime import date, datetime
 import sys
 import numpy as np
 import torch
 import time
 import os
+
 model = torch.hub.load(r'yolov5', 'custom', path='yolov5/runs/train/exp2/weights/best.pt', source='local', force_reload=True, device='cpu')
 model.conf = 0.5
 # capture photo
@@ -39,12 +40,12 @@ print(array_ip_cameras[3])
 class ImageViewer(QDialog):
     def __init__(self, image_path):
         super().__init__()
-        self.setWindowTitle("Image Viewer")
-
+        self.setWindowTitle("Bukti")
+        self.setWindowIcon(QIcon(QPixmap("logo.png")))
         layout = QVBoxLayout()
-
+        foto_path = f"foto/{image_path}"
         label = QLabel()
-        pixmap = QPixmap(image_path)
+        pixmap = QPixmap(foto_path)
         label.setPixmap(pixmap)
 
         layout.addWidget(label)
@@ -54,6 +55,7 @@ class CaptureIpCameraFramesWorker(QThread):
     ImageUpdated = pyqtSignal(QImage)
     warningSignalhelm = pyqtSignal()
     warningSignalvest = pyqtSignal()
+    result_ready = pyqtSignal(str, str, str, str)
 
     def __init__(self, url, camnumber) -> None:
         super(CaptureIpCameraFramesWorker, self).__init__()
@@ -95,20 +97,28 @@ class CaptureIpCameraFramesWorker(QThread):
                         check = coor[i][5].item()
                         if check == 1 and self.last_time - self.current_time >= 5:
                             timestr = time.strftime("%m%d%H%M%S")
-                            filename = f'tanpahelm_{timestr}.jpg'  # Nama file foto dengan format 'foto_counter.jpg'
-                            file_path = os.path.join(output_folder, filename)
-                            cv2.imwrite(file_path, np.squeeze(results.render()))
-                            print(f"Foto {filename} diambil dan disimpan!")
-                            self.warningSignalhelm.emit()
-                            self.current_time = time.time()
-
-                        if check == 2 and self.last_time - self.current_time >= 5:
-                            timestr = time.strftime("%m%d%H%M%S")
+                            self.tanggal = time.strftime("%Y-%m-%d")
+                            self.waktu = datetime.now().strftime("%H:%M:%S")
                             filename = f'tanpavest_{timestr}.jpg'  # Nama file foto dengan format 'foto_counter.jpg'
                             file_path = os.path.join(output_folder, filename)
                             cv2.imwrite(file_path, np.squeeze(results.render()))
                             print(f"Foto {filename} diambil dan disimpan!")
-                            self.warningSignalvest.emit()
+                            self.bukti = filename
+                            self.result_ready.emit(self.tanggal, self.waktu, self.lokasi, self.bukti)
+                            # self.warningSignalhelm.emit()
+                            self.current_time = time.time()
+
+                        if check == 2 and self.last_time - self.current_time >= 5:
+                            timestr = time.strftime("%m%d%H%M%S")
+                            self.tanggal = time.strftime("%Y-%m-%d")
+                            self.waktu = datetime.now().strftime("%H:%M:%S")
+                            filename = f'tanpavest_{timestr}.jpg'  # Nama file foto dengan format 'foto_counter.jpg'
+                            file_path = os.path.join(output_folder, filename)
+                            cv2.imwrite(file_path, np.squeeze(results.render()))
+                            print(f"Foto {filename} diambil dan disimpan!")
+                            self.bukti = filename
+                            self.result_ready.emit(self.tanggal, self.waktu, self.lokasi, self.bukti)
+                            # self.warningSignalvest.emit()
                             self.current_time = time.time()
                         i = i + 1
                     if ret:
@@ -166,11 +176,6 @@ class MainWindow(QMainWindow):
         self.btn_ui2_1 = QPushButton('Enter', self)
         self.btn_ui2_1.clicked.connect(self.updatetable)
 
-        self.db = QSqlDatabase.addDatabase('QSQLITE')
-        self.db.setDatabaseName('logging.db')
-        if not self.db.open():
-            print("Tidak dapat membuka koneksi database")
-
         self.showText = QLabel("Total Pelanggaran")
         self.value1 = 0
         self.value2 = 0
@@ -181,6 +186,8 @@ class MainWindow(QMainWindow):
         self.showcam3 = QLabel("Camera 3 : " + str(self.value3))
         self.showcam4 = QLabel("Camera 4 : " + str(self.value4))
 
+        self.dateeditstart = QDateEdit(calendarPopup=True)
+        self.dateeditend = QDateEdit(calendarPopup=True)
         # Table instance
         self.table_widget = QTableWidget()
         self.table_widget.setColumnCount(4)
@@ -190,14 +197,10 @@ class MainWindow(QMainWindow):
         self.table_widget.setColumnWidth(2, 300)  # Kolom Lokasi
         self.table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)  # Kolom Bukti
         # rtsp://<Username>:<Password>@<IP Address>:<Port>/cam/realmonitor?channel=1&subtype=0
-        self.url_1 = "http://158.58.130.148:80/mjpg/video.mjpg"
-        self.url_3 = "http://takemotopiano.aa1.netvolante.jp:8190/nphMotionJpeg?Resolution=640x480&Quality=Standard&Framerate=30"
-        self.url_2 = "http://camera.buffalotrace.com/mjpg/video.mjpg"
-        self.url_4 = "http://61.211.241.239/nphMotionJpeg?Resolution=320x240&Quality=Standard"
-        # self.url_1 = array_ip_cameras[0]
-        # self.url_2 = array_ip_cameras[1]
-        # self.url_3 = array_ip_cameras[2]
-        # self.url_4 = array_ip_cameras[3]
+        self.url_1 = array_ip_cameras[0]
+        self.url_2 = array_ip_cameras[1]
+        self.url_3 = array_ip_cameras[2]
+        self.url_4 = array_ip_cameras[3]
         self.camname1 = "Camera 1"
         self.camname2 = "Camera 2"
         self.camname3 = "Camera 3"
@@ -273,23 +276,27 @@ class MainWindow(QMainWindow):
         self.CaptureIpCameraFramesWorker_1.ImageUpdated.connect(lambda image: self.ShowCamera1(image))
         self.CaptureIpCameraFramesWorker_1.warningSignalhelm.connect(self.showWarninghelm1)
         self.CaptureIpCameraFramesWorker_1.warningSignalvest.connect(self.showWarningvest1)
+        self.CaptureIpCameraFramesWorker_1.result_ready.connect(self.insert_data)
         # Create an instance of CaptureIpCameraFramesWorker.
         self.CaptureIpCameraFramesWorker_2 = CaptureIpCameraFramesWorker(self.url_2, self.camname2)
         self.CaptureIpCameraFramesWorker_2.ImageUpdated.connect(lambda image: self.ShowCamera2(image))
         self.CaptureIpCameraFramesWorker_2.warningSignalhelm.connect(self.showWarninghelm2)
         self.CaptureIpCameraFramesWorker_2.warningSignalvest.connect(self.showWarningvest2)
+        self.CaptureIpCameraFramesWorker_2.result_ready.connect(self.insert_data)
 
         # Create an instance of CaptureIpCameraFramesWorker.
         self.CaptureIpCameraFramesWorker_3 = CaptureIpCameraFramesWorker(self.url_3, self.camname3)
         self.CaptureIpCameraFramesWorker_3.ImageUpdated.connect(lambda image: self.ShowCamera3(image))
         self.CaptureIpCameraFramesWorker_3.warningSignalhelm.connect(self.showWarninghelm3)
         self.CaptureIpCameraFramesWorker_3.warningSignalvest.connect(self.showWarningvest3)
+        self.CaptureIpCameraFramesWorker_3.result_ready.connect(self.insert_data)
 
         # Create an instance of CaptureIpCameraFramesWorker.
         self.CaptureIpCameraFramesWorker_4 = CaptureIpCameraFramesWorker(self.url_4, self.camname4)
         self.CaptureIpCameraFramesWorker_4.ImageUpdated.connect(lambda image: self.ShowCamera4(image))
         self.CaptureIpCameraFramesWorker_4.warningSignalhelm.connect(self.showWarninghelm4)
         self.CaptureIpCameraFramesWorker_4.warningSignalvest.connect(self.showWarningvest4)
+        self.CaptureIpCameraFramesWorker_4.result_ready.connect(self.insert_data)
 
         # Start the thread getIpCameraFrameWorker_1.
         self.CaptureIpCameraFramesWorker_1.start()
@@ -341,27 +348,6 @@ class MainWindow(QMainWindow):
         # Set window title.
         self.setWindowTitle("IP Camera System")
 
-    def insert_data(self, tanggal, waktu, lokasi, bukti):
-        query = QSqlQuery()
-        query.prepare("INSERT INTO data (Tanggal, Waktu, Lokasi, Bukti) VALUES (?, ?, ?, ?)")
-        query.addBindValue(tanggal)
-        query.addBindValue(waktu)
-        query.addBindValue(lokasi)
-        query.addBindValue(bukti)
-        if not query.exec_():
-            print("Gagal menyisipkan data:", query.lastError().text())
-            return False
-        return True
-    def fetch_alldata(self):
-        query = QSqlQuery("SELECT * FROM data")
-        data = []
-        while query.next():
-            tanggal = query.value(1)
-            waktu = query.value(2)
-            lokasi = query.value(3)
-            bukti = query.value(4)
-            data.append((tanggal, waktu, lokasi, bukti))
-        return data
     def ui1(self) -> None:
         grid_layout = QGridLayout()
         grid_layout.setContentsMargins(0, 0, 0, 0)
@@ -382,15 +368,14 @@ class MainWindow(QMainWindow):
     def ui2(self):
         button_height = 60
         upper_layout = QHBoxLayout()
-        dateeditstart = QDateEdit(calendarPopup=True)
-        dateeditstart.setDateTime(QtCore.QDateTime.currentDateTime())
-        dateeditend = QDateEdit(calendarPopup=True)
-        dateeditend.setDateTime(QtCore.QDateTime.currentDateTime())
-        dateeditstart.setFixedHeight(button_height)
-        dateeditend.setFixedHeight(button_height)
+        selected_date = QtCore.QDateTime(2023, 7, 1, 0, 0)
+        self.dateeditstart.setDateTime(selected_date)
+        self.dateeditend.setDateTime(QDateTime.currentDateTime())
+        self.dateeditstart.setFixedHeight(button_height)
+        self.dateeditend.setFixedHeight(button_height)
         self.btn_ui2_1.setFixedHeight(button_height)
-        upper_layout.addWidget(dateeditstart)
-        upper_layout.addWidget(dateeditend)
+        upper_layout.addWidget(self.dateeditstart)
+        upper_layout.addWidget(self.dateeditend)
         upper_layout.addWidget(self.btn_ui2_1)
         data = self.fetch_alldata()
         self.table_widget.setRowCount(len(data))
@@ -401,11 +386,23 @@ class MainWindow(QMainWindow):
             itemtanggal.setTextAlignment(Qt.AlignCenter)
             itemwaktu.setTextAlignment(Qt.AlignCenter)
             itemlokasi.setTextAlignment(Qt.AlignCenter)
+            if lokasi == "Camera 1" :
+                self.value1+=1
+            if lokasi == "Camera 2" :
+                self.value2+=1
+            if lokasi == "Camera 3" :
+                self.value3+=1
+            if lokasi == "Camera 4" :
+                self.value4+=1
             self.table_widget.setItem(row, 0, itemtanggal)
             self.table_widget.setItem(row, 1, itemwaktu)
             self.table_widget.setItem(row, 2, itemlokasi)
             self.table_widget.setItem(row, 3, QTableWidgetItem(bukti))
         self.table_widget.cellClicked.connect(self.show_image)
+        self.showcam1.setText("Camera 1 : " + str(self.value1))
+        self.showcam2.setText("Camera 2 : " + str(self.value2))
+        self.showcam3.setText("Camera 3 : " + str(self.value3))
+        self.showcam4.setText("Camera 4 : " + str(self.value4))
         main_layout = QVBoxLayout()
         main_layout.addLayout(upper_layout)
         main_layout.addWidget(self.showText)
@@ -417,10 +414,100 @@ class MainWindow(QMainWindow):
         main = QWidget()
         main.setLayout(main_layout)
         return main
-
-    @QtCore.pyqtSlot()
     def updatetable(self):
-        importedfile = self.fetch_data()
+        self.resettable()
+        dtstart = self.dateeditstart.dateTime()
+        dtend = self.dateeditend.dateTime()
+        datestart = dtstart.toString(self.dateeditstart.displayFormat())
+        dateend = dtend.toString(self.dateeditend.displayFormat())
+
+        data = self.fetch_datainrange(datestart,dateend)
+        self.table_widget.setRowCount(len(data))
+        for row, (tanggal, waktu, lokasi, bukti) in enumerate(data):
+            itemtanggal = QTableWidgetItem(tanggal)
+            itemwaktu = QTableWidgetItem(waktu)
+            itemlokasi = QTableWidgetItem(lokasi)
+            itemtanggal.setTextAlignment(Qt.AlignCenter)
+            itemwaktu.setTextAlignment(Qt.AlignCenter)
+            itemlokasi.setTextAlignment(Qt.AlignCenter)
+            if lokasi == "Camera 1":
+                self.value1 += 1
+            if lokasi == "Camera 2":
+                self.value2 += 1
+            if lokasi == "Camera 3":
+                self.value3 += 1
+            if lokasi == "Camera 4":
+                self.value4 += 1
+            self.table_widget.setItem(row, 0, itemtanggal)
+            self.table_widget.setItem(row, 1, itemwaktu)
+            self.table_widget.setItem(row, 2, itemlokasi)
+            self.table_widget.setItem(row, 3, QTableWidgetItem(bukti))
+        self.showcam1.setText("Camera 1 : " + str(self.value1))
+        self.showcam2.setText("Camera 2 : " + str(self.value2))
+        self.showcam3.setText("Camera 3 : " + str(self.value3))
+        self.showcam4.setText("Camera 4 : " + str(self.value4))
+        # print(datestart)
+        # print(dateend)
+
+    def resettable(self):
+        self.table_widget.setRowCount(0)
+        self.value1 = 0
+        self.value2 = 0
+        self.value3 = 0
+        self.value4 = 0
+        self.showcam1.setText("Camera 1 : " + str(self.value1))
+        self.showcam2.setText("Camera 2 : " + str(self.value2))
+        self.showcam3.setText("Camera 3 : " + str(self.value3))
+        self.showcam4.setText("Camera 4 : " + str(self.value4))
+
+
+    def insert_data(self, tanggal, waktu, lokasi, bukti):
+        # Ubah format tanggal menjadi format yang sesuai untuk SQLite (yyyy-mm-dd)
+        query = QSqlQuery()
+        query.prepare("INSERT INTO data (Tanggal, Waktu, Lokasi, Bukti) VALUES (?, ?, ?, ?)")
+        query.addBindValue(tanggal)
+        query.addBindValue(waktu)
+        query.addBindValue(lokasi)
+        query.addBindValue(bukti)
+
+        if query.exec_():
+            print("Data berhasil dimasukkan.")
+            self.updatetable()
+            return True
+        else:
+            print("Gagal memasukkan data:", query.lastError().text())
+            return False
+    def fetch_datainrange(self, tanggal_a, tanggal_b):
+        tanggal_a = datetime.strptime(tanggal_a, "%d/%m/%Y").strftime("%Y-%m-%d")
+        tanggal_b = datetime.strptime(tanggal_b, "%d/%m/%Y").strftime("%Y-%m-%d")
+        query = QSqlQuery()
+        query.prepare("SELECT * FROM data WHERE tanggal BETWEEN :tanggal_a AND :tanggal_b")
+        query.bindValue(":tanggal_a", tanggal_a)
+        query.bindValue(":tanggal_b", tanggal_b)
+
+        data = []
+        if query.exec_():
+            while query.next():
+                tanggal = query.value(1)
+                waktu = query.value(2)
+                lokasi = query.value(3)
+                bukti = query.value(4)
+                data.append((tanggal, waktu, lokasi, bukti))
+        else:
+            print("Error executing query:", query.lastError().text())
+
+        return data
+    def fetch_alldata(self):
+        query = QSqlQuery("SELECT * FROM data")
+        data = []
+        while query.next():
+            tanggal = query.value(1)
+            waktu = query.value(2)
+            lokasi = query.value(3)
+            bukti = query.value(4)
+            data.append((tanggal, waktu, lokasi, bukti))
+        return data
+
     @QtCore.pyqtSlot()
     def ShowCamera1(self, frame: QImage) -> None:
         self.camera_1.setPixmap(QPixmap.fromImage(frame))
@@ -588,6 +675,10 @@ class MainWindow(QMainWindow):
         msg.setWindowTitle("Warning")
         msg.exec_()
 def main() -> None:
+    db = QSqlDatabase.addDatabase('QSQLITE')
+    db.setDatabaseName('logging.db')
+    if not db.open():
+        print("Tidak dapat membuka koneksi database")
     # Create a QApplication object. It manages the GUI application's control flow and main settings.
     # It handles widget specific initialization, finalization.
     # For any GUI application using Qt, there is precisely one QApplication object
