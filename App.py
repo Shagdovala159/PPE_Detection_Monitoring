@@ -14,8 +14,9 @@ import torch
 import time
 import os
 
-model = torch.hub.load(r'yolov5', 'custom', path='yolov5/runs/train/exp2/weights/best.pt', source='local', force_reload=True, device='cpu')
-model.conf = 0.5
+model = torch.hub.load(r'yolov5', 'custom', path='yolov5/runs/train/exp5/weights/best.pt', source='local', force_reload=True, device='cpu')
+model.conf = 0.7
+model.line_thickness = 1
 # capture photo
 output_folder = 'foto'  # Folder tujuan penyimpanan foto
 #setup
@@ -73,7 +74,6 @@ class CaptureIpCameraFramesWorker(QThread):
 
     def run(self) -> None:
         # Capture video from a network stream.
-        # model = torch.hub.load(r'yolov5', 'custom', path='yolov5/runs/train/exp/weights/best.pt', source='local', force_reload=True, device='cpu')
         cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
         # Get default video FPS.
         self.fps = cap.get(cv2.CAP_PROP_FPS)
@@ -84,9 +84,9 @@ class CaptureIpCameraFramesWorker(QThread):
             while self.__thread_active:
                 #
                 if not self.__thread_pause:
+                    ret, cv_img = cap.read()
                     self.last_time = time.time()
                     # Grabs, decodes and returns the next video frame.
-                    ret, cv_img = cap.read()
                     resized_img = cv2.resize(cv_img, (640, 480))
                     results = model(resized_img)
                     frame = np.squeeze(results.render())
@@ -95,20 +95,21 @@ class CaptureIpCameraFramesWorker(QThread):
                     i = 0
                     while i < rows:
                         check = coor[i][5].item()
-                        if check == 1 and self.last_time - self.current_time >= 5:
+                        if check == 1 and self.last_time - self.current_time >= 60:
                             timestr = time.strftime("%m%d%H%M%S")
                             self.tanggal = time.strftime("%Y-%m-%d")
                             self.waktu = datetime.now().strftime("%H:%M:%S")
-                            filename = f'tanpavest_{timestr}.jpg'  # Nama file foto dengan format 'foto_counter.jpg'
+                            filename = f'tanpahelm_{timestr}.jpg'  # Nama file foto dengan format 'foto_counter.jpg'
                             file_path = os.path.join(output_folder, filename)
                             cv2.imwrite(file_path, np.squeeze(results.render()))
                             print(f"Foto {filename} diambil dan disimpan!")
                             self.bukti = filename
                             self.result_ready.emit(self.tanggal, self.waktu, self.lokasi, self.bukti)
-                            # self.warningSignalhelm.emit()
+                            #self.warningSignalhelm.emit()
+                            print("Foto tanpa helm Terdeteksi")
                             self.current_time = time.time()
 
-                        if check == 2 and self.last_time - self.current_time >= 5:
+                        if check == 2 and self.last_time - self.current_time >= 60:
                             timestr = time.strftime("%m%d%H%M%S")
                             self.tanggal = time.strftime("%Y-%m-%d")
                             self.waktu = datetime.now().strftime("%H:%M:%S")
@@ -118,7 +119,8 @@ class CaptureIpCameraFramesWorker(QThread):
                             print(f"Foto {filename} diambil dan disimpan!")
                             self.bukti = filename
                             self.result_ready.emit(self.tanggal, self.waktu, self.lokasi, self.bukti)
-                            # self.warningSignalvest.emit()
+                            #self.warningSignalvest.emit()
+                            print("Foto tanpa vest Terdeteksi")
                             self.current_time = time.time()
                         i = i + 1
                     if ret:
@@ -163,7 +165,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
 
         # add all widgets
-        self.btn_1 = QPushButton('Camera', self)
+        self.btn_1 = QPushButton('Camera 1-4', self)
         self.btn_2 = QPushButton('Logging', self)
 
 
@@ -197,6 +199,7 @@ class MainWindow(QMainWindow):
         self.table_widget.setColumnWidth(2, 300)  # Kolom Lokasi
         self.table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)  # Kolom Bukti
         # rtsp://<Username>:<Password>@<IP Address>:<Port>/cam/realmonitor?channel=1&subtype=0
+        # self.url_1 = "rtsp://admin:YJVCAK@192.168.1.2:554/Streaming/Channels/102"
         self.url_1 = array_ip_cameras[0]
         self.url_2 = array_ip_cameras[1]
         self.url_3 = array_ip_cameras[2]
@@ -359,6 +362,17 @@ class MainWindow(QMainWindow):
         self.main.setLayout(grid_layout)
         return self.main
 
+    def ui2(self) -> None:
+        grid_layout = QGridLayout()
+        grid_layout.setContentsMargins(0, 0, 0, 0)
+        grid_layout.addWidget(self.QScrollArea_5, 0, 0)
+        grid_layout.addWidget(self.QScrollArea_6, 0, 1)
+        grid_layout.addWidget(self.QScrollArea_7, 1, 0)
+        grid_layout.addWidget(self.QScrollArea_8, 1, 1)
+        self.main = QWidget()
+        self.main.setLayout(grid_layout)
+        return self.main
+
     def show_image(self, row, column):
         # Jika yang diklik adalah kolom Bukti (indeks kolom 3)
         if column == 3:
@@ -496,7 +510,8 @@ class MainWindow(QMainWindow):
         else:
             print("Error executing query:", query.lastError().text())
 
-        return data
+        data_reversed = list(reversed(data))
+        return data_reversed
     def fetch_alldata(self):
         query = QSqlQuery("SELECT * FROM data")
         data = []
@@ -506,7 +521,10 @@ class MainWindow(QMainWindow):
             lokasi = query.value(3)
             bukti = query.value(4)
             data.append((tanggal, waktu, lokasi, bukti))
-        return data
+
+        data_reversed = list(reversed(data))
+
+        return data_reversed
 
     @QtCore.pyqtSlot()
     def ShowCamera1(self, frame: QImage) -> None:

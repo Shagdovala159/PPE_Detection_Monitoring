@@ -1,4 +1,4 @@
-http://158.58.130.148:80/mjpg/video.mjpg
-http://camera.buffalotrace.com/mjpg/video.mjpg
-http://takemotopiano.aa1.netvolante.jp:8190/nphMotionJpeg?Resolution=640x480&Quality=Standard&Framerate=30
-http://61.211.241.239/nphMotionJpeg?Resolution=320x240&Quality=Standard
+rtsp://admin:NJREMH@192.168.0.196:554/Streaming/Channels/102
+rtsp://admin:YJVCAK@192.168.0.198:554/Streaming/Channels/102
+http://158.58.130.148:80/mjpg/video
+http://158.58.130.148:80/mjpg/video
